@@ -345,6 +345,12 @@ pub enum GovAction {
     SetTreasuryAddress(Address),
     SetAdmin(Address),
     SetOracle(Address),
+    /// Withdraw from the insurance fund (Issue #367).
+    WithdrawInsuranceFund(Address, i128),
+    /// Set the insurance fee split in basis points (Issue #367).
+    SetInsuranceSplitBps(u32),
+    /// Set the insurance coverage payout rate in basis points (Issue #367).
+    SetInsuranceCoverageBps(u32),
 }
 
 /// Stored governance proposal (Issue #272).
@@ -453,15 +459,15 @@ pub struct OracleHeartbeatRecord {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Round {
-    pub round_id: u64,        // Unique monotonically increasing round identifier
-    pub price_start: u128,    // Starting XLM price in stroops
-    pub start_ledger: u32,    // Ledger when round was created
-    pub start_timestamp: u64, // Ledger timestamp when round was created
-    pub bet_end_ledger: u32,  // Ledger when betting closes
-    pub end_ledger: u32,      // Ledger when round ends (~5s per ledger)
-    pub pool_up: i128,        // Total vXLM bet on UP
-    pub pool_down: i128,      // Total vXLM bet on DOWN
-    pub mode: RoundMode,      // Round mode: UpDown (0) or Precision (1)
+    pub round_id: u64,       // Unique monotonically increasing round identifier
+    pub price_start: u128,   // Starting XLM price in stroops
+    pub start_ledger: u32,   // Ledger when round was created
+    pub start_timestamp: u64,  // Ledger timestamp when round was created
+    pub bet_end_ledger: u32, // Ledger when betting closes
+    pub end_ledger: u32,     // Ledger when round ends (~5s per ledger)
+    pub pool_up: i128,       // Total vXLM bet on UP
+    pub pool_down: i128,     // Total vXLM bet on DOWN
+    pub mode: RoundMode,     // Round mode: UpDown (0) or Precision (1)
 }
 
 /// Aggregated active-round pool composition for frontend transparency.
@@ -914,6 +920,35 @@ pub enum HbGateKey {
 pub struct PendingWinningsExpiryKey(pub ());
 
 pub const PENDING_WINNINGS_EXPIRY_KEY: PendingWinningsExpiryKey = PendingWinningsExpiryKey(());
+
+/// Eligible failure events for insurance coverage (Issue #367).
+///
+/// Each variant maps to a cancel-round reason code used by the
+/// insurance coverage payout gate. Only events listed in the
+/// admin-configured whitelist trigger coverage.
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(u32)]
+pub enum InsuranceEvent {
+    /// Cancel due to oracle heartbeat failure / outage.
+    OracleOutage = 0,
+    /// Cancel due to oracle deviation exceeding the configured threshold.
+    OracleDeviation = 1,
+    /// Fallback refund when insufficient participants joined the round.
+    FallbackRefund = 2,
+}
+
+/// Cancel-round reason codes that map to InsuranceEvent variants.
+///
+/// Passed as the `reason` argument to `cancel_round`. The mapping is:
+/// - 0 → not eligible (generic / admin discretion)
+/// - 1 → OracleOutage
+/// - 2 → OracleDeviation
+/// - 3 → FallbackRefund
+pub const CANCEL_REASON_GENERIC: u32 = 0;
+pub const CANCEL_REASON_ORACLE_OUTAGE: u32 = 1;
+pub const CANCEL_REASON_ORACLE_DEVIATION: u32 = 2;
+pub const CANCEL_REASON_FALLBACK_REFUND: u32 = 3;
 
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
